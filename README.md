@@ -1,2 +1,21 @@
-# models
-Models to process collected data
+# virtualme-backend
+
+VirtualMe 插件后端项目，将插件收集到的动作序列数据进行预处理并用于训练，产出用户意图预测等数据。
+
+## 模块清单
+
+- 预处理
+- 模式识别
+- 日志总结
+- 意图预测
+- 能力分析
+
+## 项目结构
+
+### [/dataset](./dataset)
+
+收集的正式数据集
+
+### [/log](./log)
+
+收集的非正式数据，是 VirtualMe 插件的记录保存路径，其中的数据可以用于前期项目的测试
