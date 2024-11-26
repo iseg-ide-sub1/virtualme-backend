@@ -29,3 +29,5 @@ if __name__ == '__main__':
     parser.add_argument('-o', type=str, help='specialize the output json name')
     args = parser.parse_args()
 
+    preprocess_raw(args.i)
+

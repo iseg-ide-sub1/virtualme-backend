@@ -28,3 +28,6 @@ class CFC:
 if __name__ == '__main__':
     cfc = CFC(2, 1, 16)
     cfc.draw_structure()
+    x = torch.randn(1, 100, 2)  # batch_size, seq_len, in_features
+    y = cfc.inference(x)
+    print(y.shape)
