@@ -32,7 +32,7 @@ class Learner(pl.LightningModule):
         x, y = batch
         y_hat, _ = self.model.forward(x)
 
-        enable_signal = torch.sum(y, -1) > 0.0
+        enable_signal = torch.sum(y, dim=-1) > 0.0
         y_hat = y_hat[enable_signal]
         y = y[enable_signal]
         y = torch.argmax(y.detach(), dim=-1)

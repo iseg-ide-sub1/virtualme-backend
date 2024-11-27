@@ -1,11 +1,11 @@
 import torch
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
+from torch.utils.data import random_split
 
 from cfc import CFC
 from learner import Learner
-
 
 # 示例问题：根据三角函数的三种组合，生成数据集，其中三角函数的组合包括：
 # sin+cos、sin+tan、tan+cos。
@@ -45,7 +45,6 @@ def generate_data(total_seq_len, max_seq_len):
         data_x.append(x)
         data_y.append(y)
 
-    # 创建最终的数据集
     all_x = []
     all_y = []
 
@@ -53,6 +52,8 @@ def generate_data(total_seq_len, max_seq_len):
     for x, y in zip(data_x, data_y):
         for i in range(0, total_seq_len, max_seq_len):
             end = min(i + max_seq_len, total_seq_len)
+            if end - i < max_seq_len:
+                continue
             all_x.append(x[i:end])
             all_y.append(y[i:end])
 
@@ -65,18 +66,31 @@ def generate_data(total_seq_len, max_seq_len):
 
 if __name__ == '__main__':
     total_seq_len = 2000
-    max_seq_len = 50
+    max_seq_len = 67  # 不能整除，打乱使得每个样本包含不同label
     data_x, data_y = generate_data(total_seq_len, max_seq_len)
     print(data_x.shape, data_y.shape)
     # 构造dataset
     dataset = torch.utils.data.TensorDataset(data_x, data_y)
-    # 构造dataloader
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
+    # 划分数据集
+    train_size = int(0.8 * len(dataset))  # 80% 训练数据
+    val_size = len(dataset) - train_size  # 20% 验证数据
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+    # 构造训练和验证 DataLoader
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset,
         batch_size=32,
         shuffle=True,
         num_workers=4,
-        persistent_workers=True)
+        persistent_workers=True
+    )
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=32,
+        shuffle=False,
+        num_workers=4,
+        persistent_workers=True
+    )
 
     cfc = CFC(in_features=2, out_features=3, units=32)
     learner = Learner(
@@ -86,19 +100,31 @@ if __name__ == '__main__':
         weight_decay=1e-4,
     )
     logger = TensorBoardLogger('ckpt', name='cfc', version=1, log_graph=True)
+    # 配置检查点和早停回调
     checkpoint_callback = ModelCheckpoint(
-        dirpath="ckpt/cfc/version_1",  # 指定保存路径
-        filename="cfc-{epoch:02d}",  # 文件命名格式
-        save_top_k=-1,  # -1表示保存每个epoch的检查点
-        save_weights_only=True,  # 仅保存模型权重
-        every_n_epochs=100  # 每n个epoch保存一次
+        dirpath="ckpt/cfc/version_1",
+        filename="cfc-best",  # 保存最佳模型
+        save_top_k=1,  # 仅保存性能最佳的检查点
+        monitor="val_acc",  # 监控验证准确度
+        mode="max",  # 验证准确度最大化
+        save_weights_only=True
+    )
+    early_stop_callback = EarlyStopping(
+        monitor="val_acc",  # 监控验证准确度
+        mode="max",  # 希望验证准确度最大化
+        patience=50,  # 如果验证准确度n个epoch没有提升，则停止训练
+        verbose=True
     )
     trainer = Trainer(
         logger=logger,
         max_epochs=400,
         gradient_clip_val=1,
-        log_every_n_steps=3,
-        callbacks=[checkpoint_callback]
+        log_every_n_steps=5,
+        callbacks=[checkpoint_callback, early_stop_callback]
     )
 
-    trainer.fit(learner, dataloader)
+    trainer.fit(
+        learner,
+        train_dataloaders=train_dataloader,
+         val_dataloaders=val_dataloader
+    )
