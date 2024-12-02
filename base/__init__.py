@@ -1,1 +1,1 @@
-from artifact import Artifact
+from .log_item import *

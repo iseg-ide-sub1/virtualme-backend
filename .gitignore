@@ -2,3 +2,6 @@
 /.idea
 /pattern_recognition/cfc/ckpt/
 /pattern_recognition/cfc/__pycache__
+/dataset/
+/dataset_raw/
+/base/__pycache__
