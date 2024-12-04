@@ -71,6 +71,14 @@ class ContextType(enum.Enum):
     Unknown = "Unknown"
 
 
+class TaskType(enum.Enum):
+    Configuration = "Configuration"
+    View = "View"
+    Coding = "Coding"
+    Execution = "Execution"
+    Unknown = "Unknown"
+
+
 class Artifact:
     def __init__(self,
                  name: str,
@@ -143,16 +151,18 @@ class LogItem:
                  id: int,
                  timestamp: str,
                  event_type: EventType,
+                 task_type: TaskType,
                  artifact: Artifact = None,
                  context: Context = None):
         self.id = id
         self.timestamp = timestamp
         self.event_type = event_type
+        self.task_type = task_type
         self.artifact = artifact
         self.context = context
 
     def __str__(self):
-        ret = f"[{self.id}] ({self.event_type.value})\n"
+        ret = f"[{self.id}] ({self.event_type.value}) <{self.task_type.value}>\n"
         ret += f"timestamp: {self.timestamp}\n"
         if self.artifact:
             ret += f"artifact: \n{self.artifact}\n"

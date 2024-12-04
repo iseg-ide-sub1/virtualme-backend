@@ -52,6 +52,13 @@ def conv_context_type(context_type_raw):
     raise ValueError('Invalid context type: {}'.format(context_type_raw))
 
 
+def conv_task_type(task_type_raw):
+    for t in TaskType:
+        if t.value == task_type_raw:
+            return t
+    raise ValueError('Invalid task type: {}'.format(task_type_raw))
+
+
 def conv_artifact(artifact_raw, reference_raw):
     artifact_type = conv_artifact_type(artifact_raw['type'])
 
@@ -104,10 +111,11 @@ def preprocess_a_raw(raw_json_file):
         id = item['id']
         timestamp = item['timeStamp']
         event_type = conv_event_type(item['eventType'])
+        task_type = conv_task_type(item['taskType'])
         artifact = conv_artifact(item['artifact'], item['references'] if 'references' in item else None)
         context = None if 'context' not in item else conv_context(item['context'])
 
-        log_item = LogItem(id, timestamp, event_type, artifact, context)
+        log_item = LogItem(id, timestamp, event_type, task_type, artifact, context)
         log.log_items.append(log_item)
 
 
