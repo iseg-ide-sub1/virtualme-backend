@@ -5,31 +5,24 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import random_split
 
 from cfc import CFC
-from config import train_params, model_params
+from config_template import train_params, model_params
 from learner import Learner
-from dataset import generate_data  # 修改导入
+from dataset_template import generate_data
+
+
+# 示例问题：根据三角函数的三种组合，生成数据集，其中三角函数的组合包括：
+# sin+cos、sin+tan、tan+cos。
+# 标签为：0、1、2，分别表示三角函数的组合。
 
 
 if __name__ == '__main__':
-    # 使用整个数据集目录
-    dataset_dir = 'dataset'  # 包含所有pt文件的目录
+    total_seq_len = 2000
     max_seq_len = model_params['max_seq_len']
     batch_size = train_params['batch_size']
     num_workers = train_params['num_workers']
-    
-    # 生成数据
-    data_x, data_y = generate_data(dataset_dir, max_seq_len)
-    print(f'Dataset X shape: {data_x.shape}')  # [样本数, 序列长度, 特征数]
-    print(f'Dataset Y shape: {data_y.shape}')  # [样本数, 序列长度]
-    
-    # 更新模型参数以匹配特征维度
-    feature_dim = data_x.shape[-1]  # 获取特征维度
-    model_params['in_features'] = feature_dim  # 更新输入特征维度
+    data_x, data_y = generate_data(total_seq_len, max_seq_len)
+    print(data_x.shape, data_y.shape)
 
-    # 检查数据集大小
-    if data_x.shape[0] < 2:
-        raise ValueError(f"Dataset too small: {data_x.shape[0]} samples. Need at least 2 samples for training and validation.")
-    
     # 构造dataset
     dataset = torch.utils.data.TensorDataset(data_x, data_y)
     train_size = int(train_params['train_ratio'] * len(dataset))
@@ -50,10 +43,9 @@ if __name__ == '__main__':
         num_workers=num_workers,
         persistent_workers=True
     )
-    
     # 构造模型
     cfc = CFC(
-        in_features=model_params['in_features'],  # 使用更新后的特征维度
+        in_features=model_params['in_features'],
         out_features=model_params['out_features'],
         units=model_params['units']
     )
@@ -64,27 +56,23 @@ if __name__ == '__main__':
         decay_lr=train_params['decay_lr'],
         weight_decay=train_params['weight_decay'],
     )
-    
-    # 配置日志记录器
     logger = TensorBoardLogger('ckpt', name='cfc', version=1, log_graph=True)
 
     # 配置检查点和早停回调
     checkpoint_callback = ModelCheckpoint(
         dirpath="ckpt/cfc/version_1",
-        filename="cfc-best",
-        save_top_k=1,
-        monitor="val_acc",
-        mode="max",
+        filename="cfc-best",  # 保存最佳模型
+        save_top_k=1,  # 仅保存性能最佳的检查点
+        monitor="val_acc",  # 监控验证准确度
+        mode="max",  # 验证准确度最大化
         save_weights_only=True
     )
-    
     early_stop_callback = EarlyStopping(
-        monitor="val_acc",
-        mode="max",
-        patience=train_params['early_stop_patience'],
+        monitor="val_acc",  # 监控验证准确度
+        mode="max",  # 希望验证准确度最大化
+        patience=train_params['early_stop_patience'],  # 如果验证准确度n个epoch没有提升，则停止训练
         verbose=True
     )
-    
     trainer = Trainer(
         logger=logger,
         max_epochs=train_params['max_epochs'],
@@ -93,12 +81,8 @@ if __name__ == '__main__':
         callbacks=[checkpoint_callback, early_stop_callback]
     )
 
-    # 开始训练
     trainer.fit(
         learner,
         train_dataloaders=train_dataloader,
         val_dataloaders=val_dataloader
     )
-
-    # 打印训练结果
-    print(f'Best validation accuracy: {checkpoint_callback.best_model_score:.4f}')

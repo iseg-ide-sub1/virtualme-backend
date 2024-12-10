@@ -1,67 +1,72 @@
+# pattern_recognition/cfc/learner.py
+
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+import torch.optim as optim
 
 
 class Learner(pl.LightningModule):
-    def __init__(self, model, lr, weight_decay, decay_lr):
+    def __init__(self, model, lr=0.001, decay_lr=0.97, weight_decay=1e-4):
         super().__init__()
         self.model = model
         self.lr = lr
-        self.weight_decay = weight_decay
         self.decay_lr = decay_lr
-        self.validation_step_outputs = []
+        self.weight_decay = weight_decay
+
+    def forward(self, x):
+        return self.model(x)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat, _ = self.model.forward(x)
-
-        enable_signal = torch.sum(y, -1) > 0.0
-        y_hat = y_hat[enable_signal]
-        y = y[enable_signal]
-        y = torch.argmax(y.detach(), dim=-1)
+        output = self(x)  # 可能返回元组
+        y_hat = output[0] if isinstance(output, tuple) else output
+        
+        # 重塑张量以适应CrossEntropyLoss
+        y_hat = y_hat.view(-1, y_hat.size(-1))  # [batch_size * seq_len, num_classes]
+        y = y.view(-1)  # [batch_size * seq_len]
+        
         loss = nn.CrossEntropyLoss()(y_hat, y)
-
-        preds = torch.argmax(y_hat.detach(), dim=-1)  # labels are given as one-hot
+        self.log('train_loss', loss)
+        
+        # 计算准确率
+        preds = torch.argmax(y_hat, dim=1)
         acc = (preds == y).float().mean()
-        self.log("train_acc", acc, prog_bar=True)
-        self.log("train_loss", loss, prog_bar=True)
-        return {"loss": loss}
+        self.log('train_acc', acc)
+        
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat, _ = self.model.forward(x)
-
-        enable_signal = torch.sum(y, dim=-1) > 0.0
-        y_hat = y_hat[enable_signal]
-        y = y[enable_signal]
-        y = torch.argmax(y.detach(), dim=-1)
+        output = self(x)  # 可能返回元组
+        y_hat = output[0] if isinstance(output, tuple) else output
+        
+        # 重塑张量以适应CrossEntropyLoss
+        y_hat = y_hat.view(-1, y_hat.size(-1))  # [batch_size * seq_len, num_classes]
+        y = y.view(-1)  # [batch_size * seq_len]
+        
         loss = nn.CrossEntropyLoss()(y_hat, y)
-
-        preds = torch.argmax(y_hat.detach(), dim=-1)  # labels are given as one-hot
+        self.log('val_loss', loss)
+        
+        # 计算准确率
+        preds = torch.argmax(y_hat, dim=1)
         acc = (preds == y).float().mean()
-
-        self.log("val_loss", loss, prog_bar=True)
-        self.log("val_acc", acc, prog_bar=True)
-        self.validation_step_outputs.append((loss, acc))
-        return loss, acc
-
-    def on_validation_epoch_end(self):
-        val_acc = torch.stack([l[1] for l in self.validation_step_outputs])
-
-        val_acc = torch.mean(val_acc)
-        print(f"\nval_acc: {val_acc.item():0.3f}\n")
-
-    def test_step(self, batch, batch_idx):
-        return self.validation_step(batch, batch_idx)
+        self.log('val_acc', acc)
+        
+        return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
+        optimizer = optim.Adam(
+            self.parameters(),
             lr=self.lr,
             weight_decay=self.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.LambdaLR(
-            optimizer, lambda epoch: self.decay_lr ** epoch
+        scheduler = optim.lr_scheduler.ExponentialLR(
+            optimizer,
+            gamma=self.decay_lr
         )
-        return [optimizer], [scheduler]
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': scheduler,
+            'monitor': 'val_loss'
+        }
