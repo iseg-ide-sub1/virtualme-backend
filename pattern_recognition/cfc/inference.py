@@ -15,7 +15,7 @@ if __name__ == '__main__':
     data_x, data_y = generate_data(total_seq_len, max_seq_len)
     print(data_x.shape, data_y.shape)
 
-    # 构造模型
+    # 构造模型 
     cfc = CFC(
         in_features=model_params['in_features'],
         out_features=model_params['out_features'],
