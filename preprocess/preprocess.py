@@ -81,7 +81,7 @@ def conv_artifact(artifact_raw, reference_raw):
             reference.append(conv_artifact(r, None))
 
     artifact = Artifact(name, artifact_type, reference)
-    add_to_artifact_history(artifact)
+
 
     return artifact
 
@@ -102,15 +102,21 @@ def conv_context(context_raw):
 
     context = Context(context_type, content, start, end)
 
-    if context_type == ContextType.Terminal and (content_before != '' or content_after != ''):  # 是终端命令执行操作
-        add_to_cmd_history(context)
-
     return context
 
 
 def preprocess_a_raw(raw_json_file):
-    with open(raw_json_file, 'r') as f:
+
+    def is_skipped_file_type(file_name):
+        for skip_file_type in skipped_file_types:
+            if skip_file_type in file_name:
+                return True
+        return False
+
+    with open(raw_json_file, 'r', encoding='utf-8') as f:
         raw_json = json.load(f)
+
+    raw_num = len(raw_json)
 
     for item in raw_json:
         id = item['id']
@@ -120,28 +126,37 @@ def preprocess_a_raw(raw_json_file):
         artifact = conv_artifact(item['artifact'], item['references'] if 'references' in item else None)
         context = None if 'context' not in item else conv_context(item['context'])
 
+        if is_skipped_file_type(artifact.name):
+            continue
+
         log_item = LogItem(id, timestamp, event_type, task_type, artifact, context)
         log.log_items.append(log_item)
+        add_to_artifact_history(artifact)
+        if context and context.context_type == ContextType.Terminal:  # 是终端命令执行操作
+            add_to_cmd_history(context)
+
+    return raw_num
 
 
-def preprocess(single_json=None, json_dir=dataset_raw_dir):
+def preprocess(single_json=None, raw_json_dir=None, pt_name=None):
     dataset_name = ''
+    raw_num = 0
 
     if single_json:
         dataset_name = os.path.basename(single_json).split('.')[0]
-        preprocess_a_raw(single_json)
-    elif json_dir:
+        raw_num = preprocess_a_raw(single_json)
+    elif raw_json_dir:
         # dataset_name取dir下所有json文件的最大前缀
-        files = os.listdir(json_dir)
+        files = os.listdir(raw_json_dir)
         files.sort()
         if len(files) > 0:
-            dataset_name = os.path.basename(files[0]).split('.')[0]
+            dataset_name = pt_name if pt_name else files[0].split('.')[0]
         else:
             raise ValueError('No json files found in the directory.')
 
-        for file in files:
-            if file.endswith('.json'):
-                preprocess_a_raw(os.path.join(json_dir, file))
+        for f in files:
+            if f.endswith('.json'):
+                raw_num += preprocess_a_raw(os.path.join(raw_json_dir, f))
     else:
         raise ValueError('Please input a single json file or a directory of json files.')
 
@@ -154,14 +169,34 @@ def preprocess(single_json=None, json_dir=dataset_raw_dir):
         pickle.dump(log, f)
         print(f'Preprocessed dataset saved to {dataset_dir}/{dataset_name}.pt')
 
-    print(log)
+    # print('=====cmd history======')
+    # for c in log.cmd_history:
+    #     print(c)
+    print('=====artifact history======')
+    for a in log.artifact_history:
+        print(a)
+
+    print('=====clean num======\n', len(log.log_items))
+    print('=====raw num======\n', raw_num)
+
+
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--single-json', type=str, default=None, help='input a single log json file')
-    parser.add_argument('-f', '--json-dir', type=str, default=dataset_raw_dir,
+    parser.add_argument('-f', '--json-dir', type=str, default=None,
                         help='input a directory of log json files')
     args = parser.parse_args()
 
-    preprocess(args.single_json, args.json_dir)
+    if not args.single_json and not args.json_dir:
+        raise ValueError('Please input a single json file or a directory of json files.')
+
+    json_dir = os.path.join(dataset_raw_dir, args.json_dir)
+    for file in os.listdir(json_dir):
+        # 如果包含文件夹名为virtualme-logs，实际是该文件夹下所有json文件
+        if 'virtualme-logs' in file:
+            json_dir = os.path.join(json_dir, file)
+            break
+
+    preprocess(args.single_json, json_dir, pt_name=args.json_dir)

@@ -1,30 +1,7 @@
 from __future__ import annotations
 
 import enum
-
-
-class EventType(enum.Enum):
-    OpenTextDocument = "OpenTextDocument"
-    CloseTextDocument = "CloseTextDocument"
-    ChangeTextDocument = "ChangeTextDocument"
-    CreateFile = "CreateFile"
-    DeleteFile = "DeleteFile"
-    SaveFile = "SaveFile"
-    RenameFile = "RenameFile"
-    MoveFile = "MoveFile"
-    AddTextDocument = "AddTextDocument"
-    DeleteTextDocument = "DeleteTextDocument"
-    EditTextDocument = "EditTextDocument"
-    RedoTextDocument = "RedoTextDocument"
-    UndoTextDocument = "UndoTextDocument"
-    SelectText = "SelectText"
-    MouseHover = "MouseHover"
-    MouseClick = "MouseJump"
-    OpenTerminal = "OpenTerminal"
-    CloseTerminal = "CloseTerminal"
-    ChangeActiveTerminal = "ChangeActiveTerminal"
-    ExecuteTerminalCommand = "ExecuteTerminalCommand"
-    ExecuteMenuItem = "ExecuteMenuItem"
+from .event_types import EventType
 
 
 class ArtifactType(enum.Enum):
