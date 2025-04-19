@@ -193,10 +193,9 @@ if __name__ == '__main__':
         raise ValueError('Please input a single json file or a directory of json files.')
 
     json_dir = os.path.join(dataset_raw_dir, args.json_dir)
-    for file in os.listdir(json_dir):
-        # 如果包含文件夹名为virtualme-logs，实际是该文件夹下所有json文件
-        if 'virtualme-logs' in file:
-            json_dir = os.path.join(json_dir, file)
-            break
+    if '.virtualme' in json_dir:
+        json_dir = os.path.join(json_dir, '.virtualme', 'event')
+    else:
+        json_dir = os.path.join(json_dir, 'event')
 
     preprocess(args.single_json, json_dir, pt_name=args.json_dir)
