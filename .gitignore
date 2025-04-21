@@ -5,3 +5,8 @@
 /dataset/
 /dataset_raw/
 /base/__pycache__
+/artifact_prediction/cfc/__pycache__
+/artifact_prediction/cfc/ckpt
+/ckpt
+/ckpt
+/visualizations
