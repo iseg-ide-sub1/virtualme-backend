@@ -21,5 +21,16 @@ train_params = {
     'train_ratio': 0.8,
     'val_ratio': 0.2,
     'early_stop_patience': 20,
-    'log_interval': 5
+    'log_interval': 2
+}
+
+wv_params = {
+    'vector_size' : 50,# 词向量维度
+    'window' : 5,  # 上下文窗口
+    'min_count' : 1,  # 最小词频
+    'workers' : 4,  # 并行训练线程
+    'sg' : 1,  # 使用skip-gram
+    'hs' : 0,  # 使用negative sampling
+    'negative' : 5,  # 负采样数量
+    'epochs' : 30  # 迭代次数
 }

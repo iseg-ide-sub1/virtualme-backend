@@ -1,3 +1,5 @@
+import subprocess
+
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
@@ -6,15 +8,17 @@ from torch.utils.data import random_split
 
 # 兼容从自身目录运行
 try:
-    from .dataset import load_train_data_raw, train_data_raw_2_dataset
+    from .dataset import EventDataset
     from .cfc import CFC
     from .config import train_params, model_params
     from .learner import Learner, MultiStepLoss
 except ImportError:
-    from dataset import load_train_data_raw, train_data_raw_2_dataset
+    from dataset import EventDataset
     from cfc import CFC
     from config import train_params, model_params
     from learner import Learner, SequenceMultiStepLoss
+
+torch.set_float32_matmul_precision('medium')
 
 
 if __name__ == '__main__':
@@ -25,8 +29,8 @@ if __name__ == '__main__':
     num_workers = train_params['num_workers']
 
     # 加载数据, 构造dataset
-    raw_data = load_train_data_raw(dataset_dir)
-    event_dataset = train_data_raw_2_dataset(raw_data, pred_len=pred_len, max_seq_len=max_seq_len)
+    event_dataset = EventDataset(model_params)
+    event_dataset.load_train_data_from_raw(dataset_dir)
     train_size = int(train_params['train_ratio'] * len(event_dataset))
     val_size = len(event_dataset) - train_size
     train_dataset, val_dataset = random_split(event_dataset, [train_size, val_size])
