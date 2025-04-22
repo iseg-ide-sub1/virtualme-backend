@@ -37,9 +37,11 @@ class SequenceMultiStepLoss(nn.Module):
         else:
             raise ValueError(f"Unsupported base loss '{base}'")
 
-    def forward(self, preds: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def forward(self, preds: torch.Tensor, labels: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """
-        :param preds, labels: Tensor of shape [B, T, k, D]
+        :param preds: Tensor of shape [B, T, k, D], predictions
+        :param labels: Tensor of shape [B, T, k, D], ground truth labels
+        :param mask: Tensor of shape [B, T, 1], 0 for valid, 1 for invalid time steps
         :return: scalar loss
         """
         B, T, k, D = preds.shape
@@ -51,45 +53,41 @@ class SequenceMultiStepLoss(nn.Module):
         else:
             err = self.criterion(preds, labels)  # [B, T, k, D]
 
-        # 按 特征维度 D 平均 → [B, T, k]
+        # 2. 按特征维度 D 平均 → [B, T, k]
         loss_bt_k = err.mean(dim=3)
 
-        # 2. 对 k 维度加权（可选）
-        if self.w_k is not None:
-            w_k = self.w_k.to(loss_bt_k.device).view(1, 1, k)
-            loss_bt_k = loss_bt_k * w_k
+        # 3. 定义权重张量
+        device = preds.device
+        w_k_tensor = self.w_k.view(1, 1, k) if self.w_k is not None else torch.ones(1, 1, k, device=device)
+        w_t_tensor = self.w_t.view(1, T, 1) if self.w_t is not None else torch.ones(1, T, 1, device=device)
 
-        # 3. 对 T 维度加权（可选）
-        if self.w_t is not None:
-            w_t = self.w_t.to(loss_bt_k.device).view(1, T, 1)
-            loss_bt_k = loss_bt_k * w_t
+        # 4. 应用权重 → [B, T, k]
+        loss_bt_k_weighted = loss_bt_k * w_k_tensor * w_t_tensor
 
-        # 4. 聚合 k 和 T：sum 后再归一化
-        # 如果同时加了 w_k, w_t，则无须再 / (k*T)，否则用 mean
-        loss_base = loss_bt_k.sum(dim=(1, 2)) / ((self.w_k is None) * (k) + 0) \
-                    / ((self.w_t is None) * (T) + 0)
-        # 处理当有某一权重时，按 sum(k)/sum(w_k) 和 sum(T)/sum(w_t)
-        if self.w_k is not None:
-            loss_base = loss_base / self.w_k.sum()
-        if self.w_t is not None:
-            loss_base = loss_base / self.w_t.sum()
+        # 5. 应用掩码 → [B, T, k]
+        mask_tensor = (1 - mask).view(B, T, 1)  # [B, T, 1], 1 for valid, 0 for invalid
+        loss_bt_k_masked = loss_bt_k_weighted * mask_tensor
 
-        # loss_base 形状 [B]
+        # 6. 计算基础损失的总和和归一化因子
+        total_loss_base = loss_bt_k_masked.sum()
+        normalization_base = (w_k_tensor * w_t_tensor * mask_tensor).sum()
+        loss_base = total_loss_base / (normalization_base + 1e-8)  # 避免除以零
 
-        # 5. 趋势一致性损失（仅在 k 维度上对每个时间步求一阶差分）
+        # 7. 计算趋势一致性损失（如果适用）
         if self.trend_w > 0:
-            # preds, labels: [B, T, k, D]
             dp = preds[:, :, 1:, :] - preds[:, :, :-1, :]  # [B, T, k-1, D]
             dy = labels[:, :, 1:, :] - labels[:, :, :-1, :]  # [B, T, k-1, D]
             trend_err = (dp - dy).pow(2).mean(dim=3)  # [B, T, k-1]
-            # k-1 维度同样可加权（这里默认等权）
-            loss_trend = trend_err.mean(dim=(1, 2))  # [B]
-            loss = loss_base + self.trend_w * loss_trend
+            trend_err_masked = trend_err * mask_tensor  # 广播到 [B, T, k-1]
+            total_trend_loss = trend_err_masked.sum()
+            normalization_trend = mask_tensor.sum() * (k - 1)  # 有效时间步数 × (k-1)
+            loss_trend = total_trend_loss / (normalization_trend + 1e-8)
         else:
-            loss = loss_base
+            loss_trend = 0
 
-        # 最后对 batch 维度求均值
-        return loss.mean()
+        # 8. 组合损失
+        loss = loss_base + self.trend_w * loss_trend
+        return loss
 
 
 class Learner(pl.LightningModule):
@@ -97,6 +95,7 @@ class Learner(pl.LightningModule):
         super().__init__()
         self.model = model
         self.lr = lr
+        self.decay_lr = decay_lr
         self.weight_decay = weight_decay
         self.model_params = model_params
         self.loss_fn = loss_fn
@@ -159,7 +158,7 @@ class Learner(pl.LightningModule):
         return match_embeds
 
     def _prepare_batch(self, batch):
-        time, event_type_embed, feedback_embed, artifact_embed, candidate_embed, labels_embed = batch
+        time, event_type_embed, feedback_embed, artifact_embed, candidate_embed, labels_embed, mask = batch
 
         t_elapsed = time[:, 1:] - time[:, :-1]
         t_fill = torch.zeros(time.size(0), 1, device=time.device)
@@ -168,15 +167,18 @@ class Learner(pl.LightningModule):
 
         x = torch.cat((event_type_embed, feedback_embed, artifact_embed), dim=2)
 
-        return time, x, candidate_embed, labels_embed
+        return time, x, candidate_embed, labels_embed, mask
 
     def training_step(self, batch, batch_idx):
-        time, x, candidate_embed, labels_embed = self._prepare_batch(batch)
+        time, x, candidate_embed, labels_embed, mask = self._prepare_batch(batch)
 
         output = self.forward(x, time)  # 可能返回元组
         artifact_preds = output[0] if isinstance(output, tuple) else output
 
-        loss = self.loss_fn(artifact_preds, labels_embed)
+        # artifact_preds: [B, T, k, D]
+        # labels_embed: [B, T, k, D]
+        # mask: [B, T, D]
+        loss = self.loss_fn(artifact_preds, labels_embed, mask)
         self.log('train_loss', loss)
 
         artifact_preds = self.retrieve_candidate_embed(artifact_preds, candidate_embed)
@@ -187,12 +189,12 @@ class Learner(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        time, x, candidate_embed, labels_embed = self._prepare_batch(batch)
+        time, x, candidate_embed, labels_embed, mask = self._prepare_batch(batch)
 
         output = self.forward(x, time)  # 可能返回元组
         artifact_preds = output[0] if isinstance(output, tuple) else output
 
-        loss = self.loss_fn(artifact_preds, labels_embed)
+        loss = self.loss_fn(artifact_preds, labels_embed, mask)
         self.log('val_loss', loss)
 
         artifact_preds = self.retrieve_candidate_embed(artifact_preds, candidate_embed)

@@ -5,7 +5,7 @@ model_params = {
     'feedback_dim': 1,  # 反馈维度
     'artifact_embedding_dim': 27,  # 工件特征嵌入维度
     'units': 128,  # 隐藏单元数
-    'max_seq_len': 50,  # 根据实际序列长度调整
+    'max_seq_len': 20,  # 根据实际序列长度调整
     'candidate_num': 10,  # 候选集大小
     'pred_len': 1,  # 预测步长
     'tau': 1,  # 时间戳缩放倍率
