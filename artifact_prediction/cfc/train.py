@@ -1,5 +1,3 @@
-import subprocess
-
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
@@ -29,7 +27,7 @@ if __name__ == '__main__':
     num_workers = train_params['num_workers']
 
     # 加载数据, 构造dataset
-    event_dataset = EventDataset(model_params)
+    event_dataset = EventDataset()
     event_dataset.load_train_data_from_raw(dataset_dir)
     train_size = int(train_params['train_ratio'] * len(event_dataset))
     val_size = len(event_dataset) - train_size
@@ -51,7 +49,7 @@ if __name__ == '__main__':
     )
 
     # 构造模型
-    cfc = CFC(model_params)
+    cfc = CFC()
 
     learner = Learner(
         cfc.model,

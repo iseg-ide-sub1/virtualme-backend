@@ -1,27 +1,30 @@
+import os
+
+import matplotlib.pyplot as plt
+import seaborn as sns
 import torch
 from ncps.torch import CfC
 from ncps.wirings import AutoNCP
-import os
 
 try:
     from .config import model_params
 except ImportError:
     from config import model_params
 
+
 class CFC:
-    def __init__(self, model_params):
-        in_features = model_params['event_type_embedding_dim'] + model_params['feedback_dim'] + model_params['artifact_embedding_dim']
+    def __init__(self):
+        in_features = model_params['event_type_embedding_dim'] + model_params['feedback_dim'] + model_params[
+            'artifact_embedding_dim']
         units = model_params['units']
         out_features = model_params['artifact_embedding_dim'] * model_params['pred_len']
 
         self.wiring = AutoNCP(units, out_features)
         self.model = CfC(in_features, self.wiring, batch_first=True)
 
-    def draw_structure(self, save_dir='visualizations'):
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-
+    def draw_structure(self):
         # 创建保存目录
+        save_dir = os.path.join(os.path.dirname(__file__), 'visualizations')
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, 'network_structure.png')
 
@@ -31,7 +34,7 @@ class CFC:
         plt.legend(handles=legend_handles, loc="upper center", bbox_to_anchor=(1, 1))
         sns.despine(left=True, bottom=True)
         plt.tight_layout()
-        
+
         # 保存图片
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()  # 关闭图形释放内存
@@ -44,11 +47,11 @@ class CFC:
 
 if __name__ == '__main__':
     # 创建模型
-    cfc = CFC(model_params)
-    
+    cfc = CFC()
+
     # 生成并保存网络结构图
     cfc.draw_structure()
-    
+
     # 测试推理
     in_features = model_params['event_type_embedding_dim'] + model_params['feedback_dim'] + model_params[
         'artifact_embedding_dim']

@@ -7,13 +7,15 @@ import torch
 try:
     from .config import *
     from .event_type_2_vec import event_type_2_vec
+    from .config import model_params
 except ImportError:
     from config import *
     from event_type_2_vec import event_type_2_vec
+    from config import model_params
 
 
 class EventDataset(torch.utils.data.Dataset):
-    def __init__(self, model_params):
+    def __init__(self):
         self.model_params = model_params
         self.seqs = []
 

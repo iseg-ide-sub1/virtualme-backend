@@ -157,6 +157,15 @@ class Learner(pl.LightningModule):
 
         return match_embeds
 
+    def acc_fn(self, artifact_preds, labels_embed, mask) -> float:
+        match_matrix = (artifact_preds == labels_embed)
+        valid_mask = (1 - mask).unsqueeze(2).expand(-1, -1, artifact_preds.shape[2], -1)  # [B,T,k,D]
+        valid_match_num = (match_matrix * valid_mask).sum(dim=(1, 2, 3))  # [B]
+        valid_time_steps = (1 - mask).sum(dim=1)  # [B,1] → 每个batch的有效时间步数
+        total_valid_comparisons = valid_time_steps * self.model_params['pred_len'] * labels_embed.shape[-1]  # [B,1]
+        match_rate = valid_match_num / (total_valid_comparisons.squeeze(1) + 1e-8)  # [B]
+        return match_rate.mean()
+
     def _prepare_batch(self, batch):
         time, event_type_embed, feedback_embed, artifact_embed, candidate_embed, labels_embed, mask = batch
 
@@ -182,9 +191,8 @@ class Learner(pl.LightningModule):
         self.log('train_loss', loss)
 
         artifact_preds = self.retrieve_candidate_embed(artifact_preds, candidate_embed)
-        match_num = (artifact_preds == labels_embed).sum(dim=(1, 2))
-        match_rate = match_num / self.model_params['pred_len'] / artifact_preds.shape[1]
-        self.log('train_acc', match_rate.mean())
+        acc = self.acc_fn(artifact_preds, labels_embed, mask)
+        self.log('train_acc', acc)
 
         return loss
 
@@ -198,9 +206,9 @@ class Learner(pl.LightningModule):
         self.log('val_loss', loss)
 
         artifact_preds = self.retrieve_candidate_embed(artifact_preds, candidate_embed)
-        match_num = (artifact_preds == labels_embed).sum(dim=(1, 2))
-        match_rate = match_num / self.model_params['pred_len'] / artifact_preds.shape[1]
-        self.log('val_acc', match_rate.mean())
+
+        acc = self.acc_fn(artifact_preds, labels_embed, mask)
+        self.log('val_acc', acc)
 
         return loss
 
