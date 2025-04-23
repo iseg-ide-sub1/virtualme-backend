@@ -4,6 +4,7 @@ from datetime import datetime
 
 import torch
 
+
 try:
     from .config import *
     from .event_type_2_vec import event_type_2_vec
@@ -115,8 +116,6 @@ class EventDataset(torch.utils.data.Dataset):
                 found = False
                 for k, candidate_artifact in enumerate(candidate_artifacts):
                     if artifact_equal(candidate_artifact, next_event['artifact']):
-                        # print(f"Found candidate artifact: {candidate_artifact['name']}, 第{i+1}个事件的第{k+1}个候选工件")
-                        # print(candidate_embeds[k])
                         labels.append(candidate_embeds[k])
                         found = True
                         break

@@ -1,8 +1,9 @@
-import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import random_split
+from torch import set_float32_matmul_precision
+from torch.utils.data import DataLoader
 
 # 兼容从自身目录运行
 try:
@@ -16,8 +17,7 @@ except ImportError:
     from config import train_params, model_params
     from learner import Learner, SequenceMultiStepLoss
 
-torch.set_float32_matmul_precision('medium')
-
+set_float32_matmul_precision('medium')
 
 if __name__ == '__main__':
     dataset_dir = '../../dataset_raw'
@@ -33,14 +33,14 @@ if __name__ == '__main__':
     val_size = len(event_dataset) - train_size
     train_dataset, val_dataset = random_split(event_dataset, [train_size, val_size])
 
-    train_dataloader = torch.utils.data.DataLoader(
+    train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
         persistent_workers=True
     )
-    val_dataloader = torch.utils.data.DataLoader(
+    val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
