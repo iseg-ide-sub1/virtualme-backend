@@ -17,13 +17,33 @@ def build_word2vec_model() -> Word2Vec:
     # 提取所有EventType短语
     event_phrases = [event.value for event in EventType]
 
-    # 对短语进行分词处理（基于驼峰命名规则拆分）
-    def split_camel_case(phrase: str) -> List[str]:
-        words = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', phrase)
-        return [word.lower() for word in words]
+    def split_words(phrase: str) -> List[str]:
+        """
+        对短语进行分词处理，支持驼峰命名和下划线分隔
+
+        Args:
+            phrase: 输入短语（如"OpenTextDocument"或"filesExplorer_copy"）
+
+        Returns:
+            List[str]: 分词后的单词列表（小写）
+        """
+        # 先按下划线分割
+        phrase = phrase[0] if isinstance(phrase, tuple) else phrase
+        parts = phrase.split('_')
+
+        # 对每个部分处理驼峰命名
+        words = []
+        for part in parts:
+            if part:  # 跳过空字符串
+                # 使用正则表达式拆分驼峰命名
+                camel_words = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+                words.extend(camel_words)
+
+        # 转换为小写并过滤空结果
+        return [word.lower() for word in words if word]
 
     # 创建训练语料库
-    corpus = [split_camel_case(phrase) for phrase in event_phrases]
+    corpus = [split_words(phrase) for phrase in event_phrases]
 
     # 训练Word2Vec模型
     model = Word2Vec(

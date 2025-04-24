@@ -202,6 +202,8 @@ class EventDataset(torch.utils.data.Dataset):
 
     def __repr__(self):
         ret = f'EventDataset({len(self.seqs)} sequences)\n'
+        if len(self.seqs) == 0:
+            return ret
         ret += f'Each sequence has max length {self.seqs[0][0].size(0)} events\n'
         ret += f'Each event has {len(self.seqs[0])} features, including time, event_type, feedback, artifact_embed, candidate_embeds, labels and mask\n'
         times, event_types, feedbacks, artifact_embeds, candidate_embeds_list, labels_list, masks= self.seqs[0]
@@ -220,6 +222,6 @@ class EventDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
-    event_dataset = EventDataset(model_params)
+    event_dataset = EventDataset()
     event_dataset.load_train_data_from_raw("../../dataset_raw", keep_short_sequences=True)
     print(event_dataset)

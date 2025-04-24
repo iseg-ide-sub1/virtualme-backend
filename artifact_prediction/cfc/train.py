@@ -29,6 +29,7 @@ if __name__ == '__main__':
     # 加载数据, 构造dataset
     event_dataset = EventDataset()
     event_dataset.load_train_data_from_raw(dataset_dir)
+    print(event_dataset)
     train_size = int(train_params['train_ratio'] * len(event_dataset))
     val_size = len(event_dataset) - train_size
     train_dataset, val_dataset = random_split(event_dataset, [train_size, val_size])

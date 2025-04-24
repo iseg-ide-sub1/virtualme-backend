@@ -1,12 +1,12 @@
 
 
 model_params = {
-    'event_type_embedding_dim': 50,  # 事件类型嵌入维度
+    'event_type_embedding_dim': 16,  # 事件类型嵌入维度
     'feedback_dim': 1,  # 反馈维度
-    'artifact_embedding_dim': 27,  # 工件特征嵌入维度
+    'artifact_embedding_dim': 18,  # 工件特征嵌入维度
     'units': 128,  # 隐藏单元数
     'max_seq_len': 50,  # 根据实际序列长度调整
-    'candidate_num': 20,  # 候选集大小
+    'candidate_num': 10,  # 候选集大小
     'pred_len': 1,  # 预测步长
     'tau': 1,  # 时间戳缩放倍率
 }
@@ -25,12 +25,12 @@ train_params = {
 }
 
 wv_params = {
-    'vector_size' : 50,# 词向量维度
-    'window' : 5,  # 上下文窗口
-    'min_count' : 1,  # 最小词频
-    'workers' : 4,  # 并行训练线程
-    'sg' : 1,  # 使用skip-gram
-    'hs' : 0,  # 使用negative sampling
-    'negative' : 5,  # 负采样数量
-    'epochs' : 30  # 迭代次数
+    'vector_size': 16,  # 词向量维度
+    'window': 5,       # 上下文窗口
+    'min_count': 1,    # 最小词频
+    'workers': 4,      # 并行训练线程
+    'sg': 1,          # 使用skip-gram
+    'hs': 0,          # 使用negative sampling
+    'negative': 5,     # 负采样数量
+    'epochs': 30      # 迭代次数
 }
