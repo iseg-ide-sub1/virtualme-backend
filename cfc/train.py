@@ -8,21 +8,18 @@ from torch.utils.data import DataLoader
 # 兼容从自身目录运行
 try:
     from .dataset import EventDataset
-    from .cfc import CFC
     from .config import train_params, model_params
-    from .learner import Learner, MultiStepLoss
+    from .CfC import CFC, MultiStepLoss
 except ImportError:
     from dataset import EventDataset
-    from cfc import CFC
     from config import train_params, model_params
-    from learner import Learner, SequenceMultiStepLoss
+    from CfC import CFC, SequenceMultiStepLoss
 
 set_float32_matmul_precision('medium')
 
 if __name__ == '__main__':
-    dataset_dir = '../../dataset_raw'
+    dataset_dir = '../dataset_raw'
     max_seq_len = model_params['max_seq_len']
-    pred_len = model_params['pred_len']
     batch_size = train_params['batch_size']
     num_workers = train_params['num_workers']
 
@@ -49,15 +46,10 @@ if __name__ == '__main__':
         persistent_workers=True
     )
 
-    # 构造模型
-    cfc = CFC()
-
-    learner = Learner(
-        cfc.model,
+    cfc = CFC(
         lr=train_params['base_lr'],
         decay_lr=train_params['decay_lr'],
         weight_decay=train_params['weight_decay'],
-        model_params=model_params,
         loss_fn=SequenceMultiStepLoss()
     )
 
@@ -91,7 +83,7 @@ if __name__ == '__main__':
 
     # 开始训练
     trainer.fit(
-        learner,
+        cfc,
         train_dataloaders=train_dataloader,
         val_dataloaders=val_dataloader,
     )

@@ -1,12 +1,8 @@
 
 /.idea
-/pattern_recognition/cfc/ckpt/
-/pattern_recognition/cfc/__pycache__
 /dataset/
 /dataset_raw/
-/base/__pycache__
-/artifact_prediction/cfc/__pycache__
-/artifact_prediction/cfc/ckpt
-/ckpt
 /ckpt
 /visualizations
+/cfc/ckpt/
+*.pyc
