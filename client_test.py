@@ -1,3 +1,5 @@
+import json
+
 import requests
 import time
 from cfc import concat_json_from_folder

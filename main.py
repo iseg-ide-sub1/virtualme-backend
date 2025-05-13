@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from typing import List, Optional, Union
+from pydantic import BaseModel
 import uvicorn
-from typing import List, Dict, Any
+from fastapi import FastAPI
+
 from cfc import CFC, model_params, encode_from_json
 
 app = FastAPI()
@@ -14,7 +16,7 @@ class ArtifactPredictor:
         self.current_candidates = []
 
         @app.post("/add_events")
-        async def add_events(events: List[Dict[str, Any]]):
+        async def add_events(events: List[dict]):  # 使用明确的Event模型
             self._add_events(events)
             return {"status": "ok"}
 
@@ -22,26 +24,32 @@ class ArtifactPredictor:
         async def predict():
             return self._predict()
 
-    def _add_events(self, events: List[Dict[str, Any]]):
+        @app.get("/check")
+        async def check():
+            return {"status": "ok"}
+
+    def _add_events(self, events: List[dict]):  # 类型注解更新为List[Event]
         self.event_buffer.extend(events)
+        print('add_events:', events)
         # 获取最新的候选集
         for event in reversed(self.event_buffer):
-            if 'candidates' in event:
+            if event['candidates'] is not None:
                 self.current_candidates = event['candidates']
                 break
         # 保持缓冲区长度
         self.event_buffer = self.event_buffer[-model_params['max_seq_len']:]
 
-    def _predict(self) -> List[Dict[str, Any]]:
+    def _predict(self) -> list:
         if not self.current_candidates:
             return []
 
         seq = encode_from_json(self.event_buffer, is_inference=True)
-        return self.cfc.inference(seq, self.current_candidates, k=model_params['k'])
+        ret = self.cfc.inference(seq, self.current_candidates, k=model_params['k'])
+        print('predict:', ret)
+        return ret
 
     def launch_server(self, host: str = "0.0.0.0", port: int = 8000):
         uvicorn.run(app, host=host, port=port)
-
 
 if __name__ == '__main__':
     predictor = ArtifactPredictor('cfc/ckpt/cfc/version_1/cfc-best.ckpt')
