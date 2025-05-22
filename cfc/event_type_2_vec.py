@@ -68,7 +68,7 @@ def build_word2vec_model() -> Word2Vec:
     return model
 
 
-def event_type_2_vec(event_type: str) -> torch.Tensor:
+def event_type_2_vec(event_type: str, device: torch.device = torch.device("cpu")) -> torch.Tensor:
     model_path = os.path.join(os.path.dirname(__file__), "wv", "event_type_word2vec.model")
     if not os.path.exists(model_path):
         print("Word2Vec model found. Building...")
@@ -92,7 +92,7 @@ def event_type_2_vec(event_type: str) -> torch.Tensor:
     vectors = []
     for word in words:
         if word in model.wv:
-            vectors.append(torch.tensor(model.wv[word]))
+            vectors.append(torch.tensor(model.wv[word], device=device))
 
     if not vectors:
         # 如果没有词在模型中，返回零向量

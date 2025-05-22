@@ -5,7 +5,7 @@ model_params = {
     'feedback_dim': 1,  # 反馈维度
     'artifact_embedding_dim': 18,  # 工件特征嵌入维度
     'units': 128,  # 隐藏单元数
-    'max_seq_len': 5,  # 根据实际序列长度调整
+    'max_seq_len': 20,  # 根据实际序列长度调整
     'candidate_num': 10,  # 候选集大小
     'tau': 1,  # 时间戳缩放倍率
     'k': 5, # rank排名前k作为模型推理输出
@@ -20,7 +20,7 @@ train_params = {
     'num_workers': 4,
     'train_ratio': 0.8,
     'val_ratio': 0.2,
-    'early_stop_patience': 20,
+    'early_stop_patience': 5,
     'log_interval': 2
 }
 

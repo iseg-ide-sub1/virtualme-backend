@@ -4,12 +4,14 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import random_split
 from torch import set_float32_matmul_precision
 from torch.utils.data import DataLoader
+import datetime
+
 
 # 兼容从自身目录运行
 try:
     from .dataset import EventDataset
     from .config import train_params, model_params
-    from .CfC import CFC, MultiStepLoss
+    from .CfC import CFC, SequenceMultiStepLoss
 except ImportError:
     from dataset import EventDataset
     from config import train_params, model_params
@@ -17,15 +19,14 @@ except ImportError:
 
 set_float32_matmul_precision('medium')
 
-if __name__ == '__main__':
-    dataset_dir = '../dataset_raw'
-    max_seq_len = model_params['max_seq_len']
+
+def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
     batch_size = train_params['batch_size']
     num_workers = train_params['num_workers']
 
     # 加载数据, 构造dataset
     event_dataset = EventDataset()
-    event_dataset.load_train_data_from_raw(dataset_dir)
+    event_dataset.load_train_data_from_raw(dataset_dir, date_filter)
     print(event_dataset)
     train_size = int(train_params['train_ratio'] * len(event_dataset))
     val_size = len(event_dataset) - train_size
@@ -50,20 +51,21 @@ if __name__ == '__main__':
         lr=train_params['base_lr'],
         decay_lr=train_params['decay_lr'],
         weight_decay=train_params['weight_decay'],
-        loss_fn=SequenceMultiStepLoss()
     )
 
     # 配置日志记录器
-    logger = TensorBoardLogger('ckpt', name='cfc', version=1, log_graph=True)
+    logger = TensorBoardLogger('tensorboard', name='cfc')
 
     # 配置检查点和早停回调
+    # 获取当前日期
+    now = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     checkpoint_callback = ModelCheckpoint(
-        dirpath="ckpt/cfc/version_1",
-        filename="cfc-best",
+        dirpath="ckpt",
+        filename=now,
         save_top_k=1,
         monitor="val_acc",
         mode="max",
-        save_weights_only=True
+        save_weights_only=False
     )
 
     early_stop_callback = EarlyStopping(
@@ -90,3 +92,7 @@ if __name__ == '__main__':
 
     # 打印训练结果
     print(f'Best validation accuracy: {checkpoint_callback.best_model_score:.4f}')
+
+
+if __name__ == '__main__':
+    train()

@@ -1,5 +1,4 @@
-import json
-import os
+from datetime import datetime
 
 import torch
 
@@ -15,9 +14,9 @@ class EventDataset(torch.utils.data.Dataset):
     def __init__(self):
         self.seqs = []
 
-    def load_train_data_from_raw(self, train_data_folder):
+    def load_train_data_from_raw(self, train_data_folder, date_filter: datetime = None):
         # 读取train_data_folder下的所有json文件名list
-        train_json_list = concat_json_from_folder(train_data_folder)
+        train_json_list = concat_json_from_folder(train_data_folder, date_filter)
 
         self.seqs = encode_from_json(train_json_list)
 

@@ -23,20 +23,20 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
     # 使用Date库将timestamp转换为秒数，timestamp是iso格式的字符串，如'2021-08-17T10:30:00.000Z'
     timestamp = datetime.fromisoformat(timestamp).timestamp()
     # 计算序列的相对时间,单位为300毫秒
-    time = torch.tensor(float((timestamp - first_time) * 1000 / 300)).to(device)
+    time = torch.tensor(float((timestamp - first_time) * 1000 / 300), device=device)
 
     # 事件类型======================================================================================================
     event_type = event['eventType']
-    event_type_embed = event_type_2_vec(event_type).to(device)
+    event_type_embed = event_type_2_vec(event_type, device=device)
 
     # 环境反馈======================================================================================================
-    feedback = torch.tensor(event['feedback']).unsqueeze(0).to(device)
+    feedback = torch.tensor(event['feedback'], device=device).unsqueeze(0)
 
     # 工件嵌入======================================================================================================
     if event['artifactEmbed'] is not None:
-        artifact_embed = torch.tensor(event['artifactEmbed']).to(device)
+        artifact_embed = torch.tensor(event['artifactEmbed'], device=device)
     else:
-        artifact_embed = torch.zeros(model_params['artifact_embedding_dim']).to(device)
+        artifact_embed = torch.zeros(model_params['artifact_embedding_dim'], device=device)
 
     # 候选工件的嵌入======================================================================================================
     if event['candidateEmbeds'] is None:
@@ -73,9 +73,9 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
         return a['name'] == b['name'] and a['startPosition'] == b['startPosition'] and a['endPosition'] == b[
             'endPosition']
 
-    label = torch.zeros(model_params['artifact_embedding_dim'])
+    label = torch.zeros(model_params['artifact_embedding_dim'], device=device)
     if next_event['artifact'] is None or event['candidates'] is None:
-        label = torch.zeros(model_params['artifact_embedding_dim'])
+        label = torch.zeros(model_params['artifact_embedding_dim'], device=device)
     else:
         candidate_artifacts = [candidate for candidate in event['candidates']]
         # 找到候选工件中与下一个事件工件相同的索引,将其对应的候选工件嵌入作为标签，如果没有找到，则用0填充
@@ -86,9 +86,9 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
 
     # 掩码======================================================================================================
     # 如果label全0，说明该步理论上无法预测，在计算loss时，不计算该时间步上的误差
-    mask = torch.tensor(0).unsqueeze(0)
+    mask = torch.tensor(0, device=device).unsqueeze(0)
     if label.sum() == 0:
-        mask = torch.tensor(1).unsqueeze(0)
+        mask = torch.tensor(1, device=device).unsqueeze(0)
 
     return time, event_type_embed, feedback, artifact_embed, candidate_embeds, label, mask
 
@@ -146,7 +146,7 @@ def encode_from_json(events, is_inference=False) -> List[tuple] | tuple:
     # print('labels_list:', labels.size())
     # print('masks:', masks.size())
 
-    if is_inference: # 推理模式下，直接按tuple返回数据，方便后续处理
+    if is_inference:  # 推理模式下，直接按tuple返回数据，方便后续处理
         return (
             times,
             event_types,
@@ -186,14 +186,19 @@ def encode_from_json(events, is_inference=False) -> List[tuple] | tuple:
     return seqs
 
 
-def concat_json_from_folder(json_folder: str) -> List[dict]:
+def concat_json_from_folder(json_folder: str, date_filter: datetime = None) -> List[dict]:
     # 读取train_data_folder下的所有json文件名list
     train_json_list = [file_name for file_name in os.listdir(json_folder) if file_name.endswith('.json')]
 
     # 文件命名模式：v0.3.0_2025-04-20-16.05.54.029_train.json
     # 其中v0.3.0为版本号，2025-04-20-16.05.54.029为时间戳，train为数据类型，按照时间戳从早到晚排序
-    train_json_list.sort(key=lambda x: x.split('_')[1])
+    train_json_list.sort(key=lambda x: os.path.basename(x).split('_')[1])
+    if date_filter is not None:
+        # 过滤出距今date_filter以内的数据
+        train_json_list = [file_name for file_name in train_json_list if
+                           datetime.strptime(os.path.basename(file_name).split('_')[1], '%Y-%m-%d-%H.%M.%S.%f') >= date_filter]
 
+    print('train_json_list:', train_json_list)
     # 读取json文件内容，并将其转换为list
     ret = []
     for file_name in train_json_list:

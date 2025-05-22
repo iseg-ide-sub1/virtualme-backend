@@ -99,7 +99,7 @@ class SequenceMultiStepLoss(nn.Module):
 
 
 class CFC(pl.LightningModule):
-    def __init__(self, lr=0.001, decay_lr=0.97, weight_decay=1e-4, loss_fn=None):
+    def __init__(self, lr=0.001, decay_lr=0.97, weight_decay=1e-4):
         super().__init__()
         in_features = model_params['event_type_embedding_dim'] + model_params['feedback_dim'] + model_params[
             'artifact_embedding_dim']
@@ -111,8 +111,7 @@ class CFC(pl.LightningModule):
         self.lr = lr
         self.decay_lr = decay_lr
         self.weight_decay = weight_decay
-        self.loss_fn = loss_fn
-        self.save_hyperparameters()
+        self.loss_fn = SequenceMultiStepLoss()
 
     def forward(self, x, time):
         y = self.model(x, timespans=time)
@@ -206,8 +205,7 @@ class CFC(pl.LightningModule):
 
     def prepare_batch(self, batch):
         time, event_type_embed, feedback_embed, artifact_embed, candidate_embed, label_embed, mask = batch
-        # 打印time的类型
-        breakpoint()
+
         t_elapsed = time[:, 1:] - time[:, :-1]
         t_fill = torch.zeros(time.size(0), 1, device=time.device)
         time = torch.cat((t_fill, t_elapsed), dim=1)
