@@ -1,21 +1,23 @@
+import datetime
+import os
+import shutil
+
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
-from torch.utils.data import random_split
 from torch import set_float32_matmul_precision
 from torch.utils.data import DataLoader
-import datetime
-
+from torch.utils.data import random_split
 
 # 兼容从自身目录运行
 try:
     from .dataset import EventDataset
     from .config import train_params, model_params
-    from .CfC import CFC, SequenceMultiStepLoss
+    from .CfC import CFC
 except ImportError:
     from dataset import EventDataset
     from config import train_params, model_params
-    from CfC import CFC, SequenceMultiStepLoss
+    from CfC import CFC
 
 set_float32_matmul_precision('medium')
 
@@ -37,14 +39,16 @@ def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        persistent_workers=True
+        persistent_workers=True,
+        drop_last=True
     )
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        persistent_workers=True
+        persistent_workers=True,
+        drop_last=True
     )
 
     cfc = CFC(
@@ -80,7 +84,8 @@ def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
         max_epochs=train_params['max_epochs'],
         gradient_clip_val=1,
         log_every_n_steps=train_params['log_interval'],
-        callbacks=[checkpoint_callback, early_stop_callback]
+        callbacks=[checkpoint_callback, early_stop_callback],
+        num_sanity_val_steps=0
     )
 
     # 开始训练
@@ -92,7 +97,6 @@ def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
 
     # 打印训练结果
     print(f'Best validation accuracy: {checkpoint_callback.best_model_score:.4f}')
-
 
 if __name__ == '__main__':
     train()

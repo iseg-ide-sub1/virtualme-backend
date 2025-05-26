@@ -7,3 +7,4 @@
 /cfc/ckpt/
 *.pyc
 /tensorboard/
+/cfc/visualizations/

@@ -1,4 +1,5 @@
 from datetime import datetime
+import random
 
 import torch
 
@@ -17,7 +18,6 @@ class EventDataset(torch.utils.data.Dataset):
     def load_train_data_from_raw(self, train_data_folder, date_filter: datetime = None):
         # 读取train_data_folder下的所有json文件名list
         train_json_list = concat_json_from_folder(train_data_folder, date_filter)
-
         self.seqs = encode_from_json(train_json_list)
 
     def __len__(self):
@@ -31,8 +31,8 @@ class EventDataset(torch.utils.data.Dataset):
         if len(self.seqs) == 0:
             return ret
         ret += f'Each sequence has max length {self.seqs[0][0].size(0)} events\n'
-        ret += f'Each event has {len(self.seqs[0])} features, including time, event_type, feedback, artifact_embed, candidate_embeds, labels and mask\n'
-        times, event_types, feedbacks, artifact_embeds, candidate_embeds_list, labels, masks = self.seqs[0]
+        ret += f'Each event has {len(self.seqs[0])} features, including time, event_type, feedback, artifact_embed, candidate_embeds, labels\n'
+        times, event_types, feedbacks, artifact_embeds, candidate_embeds_list, labels = self.seqs[0]
         ret += f'For example, an event has the following features:\n'
         ret += f'Time: 1 dim tensor\n'
         ret += f'Event type: {event_types.size(1)} dim tensor\n'
@@ -41,7 +41,6 @@ class EventDataset(torch.utils.data.Dataset):
         ret += f'In-feature total: {event_types.size(1) + 1 + artifact_embeds.size(1)} dim tensor\n'
         ret += f'Candidate embeds: {candidate_embeds_list.size(1)} 个 {candidate_embeds_list.size(2)} dim tensor\n'
         ret += f'Label: {labels.size(1)} dim tensor\n'
-        ret += f'Mask: 1 dim tensor\n'
         ret += f'Model params: {model_params}\n'
 
         return ret

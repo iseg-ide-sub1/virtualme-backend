@@ -1,8 +1,10 @@
 import json
 import os
+import random
 from datetime import datetime
 from typing import List
 
+import torch.nn.functional as F
 import torch
 
 try:
@@ -14,10 +16,11 @@ except ImportError:
     from event_type_2_vec import event_type_2_vec
     from config import model_params
 
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
+
 
 def encode_an_event(first_time, event, next_event=None, is_inference=False):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     # 时间戳========================================================================================================
     timestamp = event['timestamp']
     # 使用Date库将timestamp转换为秒数，timestamp是iso格式的字符串，如'2021-08-17T10:30:00.000Z'
@@ -42,11 +45,15 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
     if event['candidateEmbeds'] is None:
         candidate_embeds = ([torch.zeros_like(artifact_embed, device=device)] * model_params['candidate_num'])
     else:
-        candidate_embeds = [torch.tensor(embed, device=device) for embed in event['candidateEmbeds']]
+        candidate_embeds = [torch.tensor(embed, device=device, dtype=torch.float) for embed in event['candidateEmbeds']]
+        # 对每个嵌入向量进行归一化
+        candidate_embeds = [F.normalize(embed, p=2, dim=-1) for embed in candidate_embeds]
+
     # 保证candidate_embeds的长度为model_params['candidate_num']
     if len(candidate_embeds) < model_params['candidate_num']:
         candidate_embeds.extend(
-            [torch.zeros_like(artifact_embed, device=device)] * (model_params['candidate_num'] - len(candidate_embeds)))
+            [torch.ones_like(artifact_embed, device=device) * 10.0] * (model_params['candidate_num'] - len(candidate_embeds)))
+        # 填充候选工件的嵌入手动设置为10， 保证模型不会输出这些值
     else:
         candidate_embeds = candidate_embeds[:model_params['candidate_num']]
 
@@ -66,12 +73,9 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
             return False
         if a['name'] is None or b['name'] is None:
             return False
-        if a['startPosition'] is None or b['startPosition'] is None:
+        if a['type'] is None or b['type'] is None:
             return False
-        if a['endPosition'] is None or b['endPosition'] is None:
-            return False
-        return a['name'] == b['name'] and a['startPosition'] == b['startPosition'] and a['endPosition'] == b[
-            'endPosition']
+        return True
 
     label = torch.zeros(model_params['artifact_embedding_dim'], device=device)
     if next_event['artifact'] is None or event['candidates'] is None:
@@ -85,9 +89,13 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
                 break
 
     # 掩码======================================================================================================
-    # 如果label全0，说明该步理论上无法预测，在计算loss时，不计算该时间步上的误差
-    mask = torch.tensor(0, device=device).unsqueeze(0)
-    if label.sum() == 0:
+    # mask默认为0即label无效，连续工件的mask为1，跨工件的mask为2
+    mask: torch.Tensor
+    if label.sum() == 0:  # 如果label全0，说明该步理论上无法预测
+        mask = torch.tensor(0, device=device).unsqueeze(0)
+    elif next_event is not None and not artifact_equal(event['artifact'], next_event['artifact']):
+        mask = torch.tensor(2, device=device).unsqueeze(0)
+    else:
         mask = torch.tensor(1, device=device).unsqueeze(0)
 
     return time, event_type_embed, feedback, artifact_embed, candidate_embeds, label, mask
@@ -157,33 +165,71 @@ def encode_from_json(events, is_inference=False) -> List[tuple] | tuple:
             torch.tensor(1).unsqueeze(0),
         )
 
-    # 按max_seq_len将数据分割为多个序列
-    seq_length = len(times)
-    offset = 0
-    max_seq_len = model_params['max_seq_len']
-    slide = max_seq_len // 2
+    # 计算真正设置label的点的索引
+    pred_point_idxs = set_pred_point(masks)
     seqs = []
+    max_seq_len = model_params['max_seq_len']
 
-    while offset < seq_length:  # 修改循环条件
-        end_idx = min(offset + max_seq_len, seq_length)  # 防止越界
-        idx = range(offset, end_idx)
-        first_tp = times[idx][0]
-        seqs.append(
-            (
-                times[idx] - first_tp,
-                event_types[idx],
-                feedbacks[idx],
-                artifact_embeds[idx],
-                candidate_embeds_list[idx],
-                labels[idx],
-                masks[idx],
+    for pred_idx in pred_point_idxs:
+        start_idx = max(0, pred_idx - max_seq_len + 1)
+        idx = range(start_idx, pred_idx + 1)  # 包含当前时间步
+
+        if len(idx) > 0:
+            first_tp = times[idx][0]
+            seqs.append(
+                (
+                    times[idx] - first_tp,  # 相对时间
+                    event_types[idx],
+                    feedbacks[idx],
+                    artifact_embeds[idx],
+                    candidate_embeds_list[idx],
+                    labels[idx],
+                )
             )
-        )
-        offset += slide
-        if end_idx == seq_length:
-            break
-
     return seqs
+
+
+def set_pred_point(masks):
+    contiguous_idxs = []
+    cross_artifact_idxs = []
+
+    for i, mask in enumerate(masks):
+        if mask == torch.tensor(2, device=device).unsqueeze(0):
+            cross_artifact_idxs.append(i)
+        elif mask == torch.tensor(1, device=device).unsqueeze(0):
+            contiguous_idxs.append(i)
+
+    # 按train_params['pred_point_proportion']中的比例设置pred_point_idxs
+    pred_point_idxs = []
+    proportions = train_params['pred_point_proportion']
+    contiguous_prop, cross_artifact_prop = proportions
+
+    len_contiguous = len(contiguous_idxs)
+    len_cross_artifact = len(cross_artifact_idxs)
+
+    # 计算各类型能取的最大批次数（避免除零）
+    x = 0
+    try:
+        x = min(
+            len_contiguous // contiguous_prop if contiguous_prop > 0 else float('inf'),
+            len_cross_artifact // cross_artifact_prop if cross_artifact_prop > 0 else float('inf')
+        )
+    except:
+        raise ValueError('预测点占比设置不合理，或数据量不足')
+
+    # 按比例计算实际取的数量
+    contiguous_count = contiguous_prop * x
+    cross_artifact_count = cross_artifact_prop * x
+
+    # 随机采样
+    if 0 < contiguous_count <= len(contiguous_idxs):
+        pred_point_idxs.extend(random.sample(contiguous_idxs, contiguous_count))
+    if 0 < cross_artifact_count <= len(cross_artifact_idxs):
+        pred_point_idxs.extend(random.sample(cross_artifact_idxs, cross_artifact_count))
+
+    print(
+        f'set {len(pred_point_idxs)} pred points, including {contiguous_count} contiguous and {cross_artifact_count} cross-artifact')
+    return pred_point_idxs
 
 
 def concat_json_from_folder(json_folder: str, date_filter: datetime = None) -> List[dict]:
@@ -196,9 +242,9 @@ def concat_json_from_folder(json_folder: str, date_filter: datetime = None) -> L
     if date_filter is not None:
         # 过滤出距今date_filter以内的数据
         train_json_list = [file_name for file_name in train_json_list if
-                           datetime.strptime(os.path.basename(file_name).split('_')[1], '%Y-%m-%d-%H.%M.%S.%f') >= date_filter]
+                           datetime.strptime(os.path.basename(file_name).split('_')[1],
+                                             '%Y-%m-%d-%H.%M.%S.%f') >= date_filter]
 
-    print('train_json_list:', train_json_list)
     # 读取json文件内容，并将其转换为list
     ret = []
     for file_name in train_json_list:
