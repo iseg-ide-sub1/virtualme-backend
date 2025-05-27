@@ -1,6 +1,4 @@
 import datetime
-import os
-import shutil
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
@@ -22,7 +20,7 @@ except ImportError:
 set_float32_matmul_precision('medium')
 
 
-def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
+def train(dataset_dir='./dataset_raw', last_ckpt_path=None, date_filter: datetime.datetime = None):
     batch_size = train_params['batch_size']
     num_workers = train_params['num_workers']
 
@@ -51,11 +49,15 @@ def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
         drop_last=True
     )
 
-    cfc = CFC(
-        lr=train_params['base_lr'],
-        decay_lr=train_params['decay_lr'],
-        weight_decay=train_params['weight_decay'],
-    )
+    cfc: CFC
+    if last_ckpt_path is not None:
+        cfc = CFC.load_from_checkpoint(last_ckpt_path)
+    else:
+        cfc = CFC(
+            lr=train_params['base_lr'],
+            decay_lr=train_params['decay_lr'],
+            weight_decay=train_params['weight_decay'],
+        )
 
     # 配置日志记录器
     logger = TensorBoardLogger('tensorboard', name='cfc')
@@ -97,6 +99,7 @@ def train(dataset_dir='./dataset_raw', date_filter: datetime.datetime = None):
 
     # 打印训练结果
     print(f'Best validation accuracy: {checkpoint_callback.best_model_score:.4f}')
+
 
 if __name__ == '__main__':
     train()

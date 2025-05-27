@@ -15,6 +15,7 @@ class ArtifactPredictor:
     def __init__(self, ckpt_dir: str):
         self.cfc = None
         self.ckpt_dir = ckpt_dir
+        self.cur_ckpt = None
         self.event_buffer = []
         self.current_candidates = []
         self.state = {
@@ -55,13 +56,14 @@ class ArtifactPredictor:
             if ckpt != latest_ckpt:
                 os.remove(os.path.join(self.ckpt_dir, ckpt))
         # 加载最新模型
-        self.cfc = CFC.load_from_checkpoint(os.path.join(self.ckpt_dir, latest_ckpt))
+        self.cur_ckpt = os.path.join(self.ckpt_dir, latest_ckpt)
+        self.cfc = CFC.load_from_checkpoint(self.cur_ckpt)
         self.cfc.eval()
         print('loaded model: ', latest_ckpt)
         self.state['is_changing_model'].value = False
 
     def _train_proc(self, dataset_dir: str, date_filter: datetime.datetime):
-        train(dataset_dir, date_filter)
+        train(dataset_dir, last_ckpt_path=self.cur_ckpt, date_filter=date_filter)
         self.state['need_change_model'].value = True
         self.state['is_updating'].value = False
 

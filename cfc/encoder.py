@@ -21,6 +21,10 @@ device = torch.device('cpu')
 
 
 def encode_an_event(first_time, event, next_event=None, is_inference=False):
+    global device
+    if is_inference:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     # 时间戳========================================================================================================
     timestamp = event['timestamp']
     # 使用Date库将timestamp转换为秒数，timestamp是iso格式的字符串，如'2021-08-17T10:30:00.000Z'
@@ -145,14 +149,6 @@ def encode_from_json(events, is_inference=False) -> List[tuple] | tuple:
     candidate_embeds_list = torch.stack([torch.stack(embeds) for embeds in candidate_embeds_list])
     labels = torch.stack(labels)
     masks = torch.stack(masks)
-
-    # print('times:', times.size())
-    # print('event_types:', event_types.size())
-    # print('feedbacks:', feedbacks.size())
-    # print('artifact_embeds:', artifact_embeds.size())
-    # print('candidate_embeds_list:', candidate_embeds_list.size())
-    # print('labels_list:', labels.size())
-    # print('masks:', masks.size())
 
     if is_inference:  # 推理模式下，直接按tuple返回数据，方便后续处理
         return (
