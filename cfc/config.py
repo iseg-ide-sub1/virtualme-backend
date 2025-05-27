@@ -10,7 +10,7 @@ model_params = {
 }
 
 train_params = {
-    'batch_size': 1,
+    'batch_size': 8,
     'max_epochs': 200,
     'base_lr': 0.001,
     'decay_lr': 0.97,
@@ -20,7 +20,7 @@ train_params = {
     'early_stop_patience': 5,
     'log_interval': 2,
     'mean_acc_size': 10, # 计算平均acc的滑动窗口大小
-    'pred_point_proportion': [1, 1] # contiguous, cross-artifact
+    'pred_point_proportion': [1, 1] # contiguous, cross-artifact的预测点比例
 }
 
 wv_params = {

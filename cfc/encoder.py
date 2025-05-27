@@ -22,7 +22,7 @@ device = torch.device('cpu')
 
 def encode_an_event(first_time, event, next_event=None, is_inference=False):
     global device
-    if is_inference:
+    if is_inference:  # 推理模式下，默认设置device为cuda，训练模式下，默认先加到cpu然后由lightning自动设置避免跨进程通信
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # 时间戳========================================================================================================
@@ -56,7 +56,8 @@ def encode_an_event(first_time, event, next_event=None, is_inference=False):
     # 保证candidate_embeds的长度为model_params['candidate_num']
     if len(candidate_embeds) < model_params['candidate_num']:
         candidate_embeds.extend(
-            [torch.ones_like(artifact_embed, device=device) * 10.0] * (model_params['candidate_num'] - len(candidate_embeds)))
+            [torch.ones_like(artifact_embed, device=device) * 10.0] * (
+                    model_params['candidate_num'] - len(candidate_embeds)))
         # 填充候选工件的嵌入手动设置为10， 保证模型不会输出这些值
     else:
         candidate_embeds = candidate_embeds[:model_params['candidate_num']]
@@ -190,6 +191,9 @@ def set_pred_point(masks):
     cross_artifact_idxs = []
 
     for i, mask in enumerate(masks):
+        if (i < model_params['max_seq_len'] - 1
+                and train_params['batch_size'] > 1):  # 前面序列不足max_seq_len，不参与预测，因为batch操作会出错，否则只能设置batch_size=1
+            continue
         if mask == torch.tensor(2, device=device).unsqueeze(0):
             cross_artifact_idxs.append(i)
         elif mask == torch.tensor(1, device=device).unsqueeze(0):

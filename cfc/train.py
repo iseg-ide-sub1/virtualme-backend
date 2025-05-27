@@ -38,7 +38,6 @@ def train(dataset_dir='./dataset_raw', last_ckpt_path=None, date_filter: datetim
         shuffle=True,
         num_workers=num_workers,
         persistent_workers=True,
-        drop_last=True
     )
     val_dataloader = DataLoader(
         val_dataset,
@@ -46,7 +45,6 @@ def train(dataset_dir='./dataset_raw', last_ckpt_path=None, date_filter: datetim
         shuffle=False,
         num_workers=num_workers,
         persistent_workers=True,
-        drop_last=True
     )
 
     cfc: CFC
